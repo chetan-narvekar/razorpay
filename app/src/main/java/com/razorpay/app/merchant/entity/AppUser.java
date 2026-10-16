@@ -1,0 +1,58 @@
+package com.razorpay.app.merchant.entity;
+
+import com.razorpay.app.common.enums.UserRole;
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.jspecify.annotations.Nullable;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.UUID;
+
+@Entity
+@Table(name = "app_user")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class AppUser {
+
+    @Id
+    @GeneratedValue(strategy = jakarta.persistence.GenerationType.UUID)
+    private UUID id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "merchant_id")
+    private Merchant merchant;
+
+    @Column(unique = true, nullable = false)
+    private String email;
+
+    @Column(nullable = false)
+    private String passwordHash;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private UserRole role;
+
+//
+//    @Override
+//    public Collection<? extends GrantedAuthority> getAuthorities() {
+//        return List.of(
+//                new SimpleGrantedAuthority("ROLE_"+role)
+//        );
+//    }
+//
+//    @Override
+//    public @Nullable String getPassword() {
+//        return passwordHash;
+//    }
+//
+//    @Override
+//    public String getUsername() {
+//        return email;
+//    }
+}
