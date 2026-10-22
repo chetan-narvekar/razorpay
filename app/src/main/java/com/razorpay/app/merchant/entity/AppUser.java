@@ -2,10 +2,7 @@ package com.razorpay.app.merchant.entity;
 
 import com.razorpay.app.common.enums.UserRole;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Collection;
@@ -18,6 +15,7 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class AppUser {
 
     @Id
