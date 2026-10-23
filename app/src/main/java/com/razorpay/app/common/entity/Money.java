@@ -1,19 +1,22 @@
 package com.razorpay.app.common.entity;
 
 import jakarta.persistence.Embeddable;
-import lombok.AllArgsConstructor;
+import lombok.*;
 
 @Embeddable
+@Getter
 @AllArgsConstructor
+@NoArgsConstructor
+@EqualsAndHashCode
 public class Money {
     private int amountUnits;
     private String currency;
 
-    private Money of(int amountUnits, String currency){
+    public static Money of(int amountUnits, String currency){
         return new Money(amountUnits, currency);
     }
 
-    public Money inr(int amountUnits){
+    public static Money inr(int amountUnits){
         return new Money(amountUnits, "INR");
     }
 
