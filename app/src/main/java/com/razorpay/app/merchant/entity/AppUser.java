@@ -1,5 +1,6 @@
 package com.razorpay.app.merchant.entity;
 
+import com.razorpay.app.common.entity.BaseEntity;
 import com.razorpay.app.common.enums.UserRole;
 import jakarta.persistence.*;
 import lombok.*;
@@ -10,13 +11,17 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "app_user")
+@Table(name = "app_user",
+        indexes = {
+                @Index(name = "idx_app_user_merchant_id", columnList = "merchant_id")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AppUser {
+public class AppUser extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = jakarta.persistence.GenerationType.UUID)

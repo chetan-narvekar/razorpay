@@ -1,6 +1,7 @@
 package com.razorpay.app.operations.entity;
 
 
+import com.razorpay.app.common.entity.BaseEntity;
 import jakarta.persistence.Embeddable;
 import lombok.*;
 
@@ -12,7 +13,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode
-public class SettlementPaymentId {
+public class SettlementPaymentId extends BaseEntity {
 
     private UUID settlementId;
 

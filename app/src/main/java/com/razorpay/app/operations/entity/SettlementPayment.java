@@ -1,5 +1,6 @@
 package com.razorpay.app.operations.entity;
 
+import com.razorpay.app.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -10,7 +11,7 @@ import lombok.*;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class SettlementPayment  {
+public class SettlementPayment{
 
     @EmbeddedId
     private SettlementPaymentId id;

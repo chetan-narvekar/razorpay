@@ -7,6 +7,7 @@ import com.razorpay.app.merchant.dto.response.ApiKeyCreateResponse;
 import com.razorpay.app.merchant.dto.response.ApiKeyResponse;
 import com.razorpay.app.merchant.entity.ApiKey;
 import com.razorpay.app.merchant.entity.Merchant;
+import com.razorpay.app.merchant.mapper.ApiKeyMapper;
 import com.razorpay.app.merchant.repository.ApiKeyRepository;
 import com.razorpay.app.merchant.repository.MerchantRepository;
 import com.razorpay.app.merchant.service.ApiKeyService;
@@ -27,7 +28,7 @@ public class ApiKeyServiceImpl implements ApiKeyService {
 
     private final ApiKeyRepository apiKeyRepository;
     private final MerchantRepository merchantRepository;
-
+    private final ApiKeyMapper apiKeyMapper;
     @Override
     public ApiKeyCreateResponse create(UUID merchantId, CreateApiKeyRequest request) {
         Merchant merchant = merchantRepository.findById(merchantId).orElseThrow(()-> new ResourceNotFoundException("Merchant", merchantId));
@@ -41,11 +42,7 @@ public class ApiKeyServiceImpl implements ApiKeyService {
 
     @Override
     public List<ApiKeyResponse> listByMerchant(UUID merchantId) {
-        return apiKeyRepository.findByMerchant_Id(merchantId).stream()
-                .map(apiKey ->
-                        new ApiKeyResponse(apiKey.getId(), apiKey.getKeyId(),
-                                apiKey.getEnvironment(),apiKey.isEnabled(),
-                                apiKey.getLastUsedAt(), null)).toList();
+        return apiKeyMapper.toResponse(apiKeyRepository.findByMerchant_Id(merchantId));
     }
 
     @Override
@@ -63,7 +60,7 @@ public class ApiKeyServiceImpl implements ApiKeyService {
         ApiKey key = apiKeyRepository.findById(keyId)
                 .filter(k->k.getMerchant().getId().equals(merchantId))
                 .orElseThrow(()-> new ResourceNotFoundException("APIKEY", keyId));
-
+        if(!key.isEnabled()) throw new RuntimeException(("Cannot rotate a disabled key"));
         String rawSecret = RandomizerUtil.randomBase64(40);
         key.setPreviousKeySecretHash(key.getKeySecretHash());
         key.setKeySecretHash(rawSecret);
