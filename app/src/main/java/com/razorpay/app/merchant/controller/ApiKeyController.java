@@ -5,7 +5,6 @@ import com.razorpay.app.merchant.dto.response.ApiKeyCreateResponse;
 import com.razorpay.app.merchant.dto.response.ApiKeyResponse;
 import com.razorpay.app.merchant.service.ApiKeyService;
 import jakarta.validation.Valid;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

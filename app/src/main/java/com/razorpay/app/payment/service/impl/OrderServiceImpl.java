@@ -47,7 +47,6 @@ public class OrderServiceImpl implements OrderService {
                 .receipt(request.receipt())
                 .amount(request.amount())
                 .notes(request.notes())
-
                 .merchantId(merchantId)
                 .orderStatus(OrderStatus.CREATED)
                 .expiresAt(request.expiresAt() != null ? request.expiresAt() :

@@ -1,0 +1,69 @@
+Interview-style questions on REST status codes & ResponseEntity
+
+Conceptual / HTTP semantics
+What is the difference between 401 Unauthorized and 403 Forbidden?
+What's the difference between idempotent and safe HTTP methods? Which methods fall into each category?
+Why is POST neither safe nor idempotent, while GET, PUT, and DELETE are idempotent (and GET is also safe)?
+What status code would you return for a successful resource creation, and why is 200 generally considered incorrect for that case?
+What is the purpose of the Location header, and in which response types (status codes) is it used?
+What's the difference between 204 No Content and 200 OK with an empty body? Why does the distinction matter to API consumers?
+Explain the difference between PUT and PATCH. When would you use one over the other?
+If a PUT request is sent to a URI that doesn't exist yet, what should the server do — create it (201) or return 404? Justify your answer.
+What does idempotency mean in the context of PUT, and why does this make it suitable for safe retries by clients (e.g., after a network timeout)?
+
+Spring / ResponseEntity specific
+What is ResponseEntity in Spring, and why would you use it instead of just returning the object directly from a @RestController method?
+What's the difference between ResponseEntity.ok(body) and ResponseEntity.status(HttpStatus.OK).body(body)?
+How do you set a custom header (e.g., Location, ETag) on a ResponseEntity? Walk through the builder API.
+What's the difference between ResponseEntity.ok() and ResponseEntity.ok(body) in terms of return type and chaining capability?
+How would you use ResponseEntity.created(URI location) in a controller, and what does it set automatically?
+How do you build a resource URI dynamically in a Spring controller after creating it (e.g., using ServletUriComponentsBuilder or UriComponentsBuilder)?
+What issue can occur with ServletUriComponentsBuilder.fromCurrentRequest() when your app runs behind a reverse proxy/load balancer, and how do you fix it?
+
+Error handling / API design
+How do you handle a "resource not found" scenario in a Spring REST API — manually in the controller, or via a global exception handler? Which is considered best practice and why?
+What is @ControllerAdvice / @RestControllerAdvice, and how does it relate to returning proper HTTP status codes for exceptions?
+Why is it considered bad practice to return 200 OK for all responses (including errors) with an error flag in the body instead of using proper HTTP status codes?
+Design a REST API response contract: for a POST /resource that creates something, a GET /resource/{id} that fetches it, a PUT /resource/{id} that replaces it, and a DELETE /resource/{id} — specify the exact status code you'd return for each in the success case.
+
+Scenario-based (common in practical interviews)
+You're building a bulk-import endpoint where some records succeed and others fail validation. What status code would you return for a partial success, and how would you structure the response body?
+A client complains that retrying a failed POST /orders call due to a network timeout created duplicate orders. How would you redesign the API to prevent this (hint: idempotency keys)?
+Your API currently returns 200 for a DELETE operation with a JSON body { "message": "deleted successfully" }. A reviewer flags this in code review — what would you change and why?
+Want me to pick a handful of these and turn them into a mock interview Q&A session (you answer, I evaluate)?
+
+Interview questions — @Embeddable / @Embedded (JPA)
+Conceptual
+What is the difference between an @Entity and an @Embeddable in JPA?
+Why doesn't an @Embeddable class require an @Id field?
+Does an @Embeddable object get its own database table? Explain what actually happens at the schema level when you use @Embedded.
+Can an @Embeddable class be persisted independently, without being part of an owning entity? Why or why not?
+Why does @Embeddable require a no-arg constructor?
+What's the lifecycle relationship between an embeddable object and its owning entity? (Hint: think cascade/orphan removal vs. embedded fields.)
+
+Column mapping / schema
+If two entities both have an @Embedded Money amount field, do they share the same table or get separate columns in their own tables?
+If you need two different @Embedded Money fields in the same entity (e.g., originalAmount and refundedAmount), what problem would you run into, and how do you solve it? (Hint: @AttributeOverrides.)
+How does Hibernate decide the column names for the fields inside an @Embeddable class (e.g., amountUnits → amount_units)?
+Can an @Embeddable contain another @Embeddable (nested embedding)? Is that supported in JPA?
+
+Querying
+How would you write a Spring Data JPA derived query method to find all Refund entities with currency = "INR", given currency lives inside the embedded Money object?
+How would you write the equivalent JPQL query referencing an embedded field?
+Can you create an index on a column that comes from an @Embeddable field? How?
+
+Design / comparison
+When would you choose @Embeddable/@Embedded over a @ManyToOne/@OneToOne relationship to a separate entity? Give a concrete example of each scenario.
+What are the downsides or limitations of using @Embeddable instead of a full entity (e.g., can't query it independently, no identity, no separate lifecycle)?
+Why is Money a good candidate for @Embeddable rather than making it a full @Entity with its own table and foreign key?
+In DDD (Domain-Driven Design) terms, what concept does @Embeddable typically correspond to? (Hint: Value Object vs. Entity.)
+
+Behavioral / validation
+In the given Money class, add() and subtract() throw IllegalArgumentException if currencies don't match. Is this validation enforced by JPA/Hibernate, or is it purely application-level logic? What does that imply about where business rules for embeddables should live?
+Since Money is mutable (has @Setter... actually note: it only has @Getter, no setter) — is Money effectively immutable here? Why might immutability matter for a value object representing money?
+What could go wrong if Money did NOT override equals()/hashCode() properly (notice @EqualsAndHashCode is present) — especially if used as part of a @Embeddable compared across entities or stored in collections?
+
+Scenario-based
+You need to store a Money value that can be null (e.g., an optional field). What JPA annotation/configuration issue might you run into with embeddables and null values, and how would you handle it?
+If you wanted to add validation like @NotNull or @Positive on Money.amountUnits, where would you place those annotations — on the Money class itself, or on the field in the owning entity? Does Bean Validation work with embeddables?
+How would schema migration (e.g., Flyway/Liquibase) differ if Money were an @Embeddable (inline columns) versus a separate @Entity with a foreign key, in terms of migration complexity when adding a new currency-related field?
