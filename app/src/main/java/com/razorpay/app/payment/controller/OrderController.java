@@ -21,7 +21,7 @@ public class OrderController {
 
     private final OrderService orderService;
 
-    UUID merchnatId = UUID.fromString("9a7fcc42-1126-4b7f-aa3f-7eec256cf8d0");
+    UUID merchnatId = UUID.fromString("6f890e60-f76e-4600-8489-b003eb00901f");
 
     @PostMapping
     public ResponseEntity<OrderResponse> create(@RequestBody @Valid CreateOrderRequest request){

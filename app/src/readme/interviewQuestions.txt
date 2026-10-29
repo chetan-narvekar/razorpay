@@ -1,0 +1,367 @@
+Q: What is the difference between == and .equals()? Why does String behave differently?
+
+Ans:
+
+    == (reference/value comparison):
+        - For primitives (int, long, boolean, etc.) -> compares actual values.
+            int a = 5, b = 5;
+            a == b; // true
+
+        - For objects (including String) -> compares memory references (whether both variables point to the exact same object instance), NOT content.
+            String s1 = new String("hello");
+            String s2 = new String("hello");
+            s1 == s2; // false -> different objects, same content
+
+    .equals() (content/logical comparison):
+        - A method on Object; default implementation just does "return this == obj".
+        - Classes override it to compare actual content. String overrides it to do character-by-character comparison.
+                    s1.equals(s2); // true -> same characters
+
+        Why String "behaves differently" - it's actually the String Pool, not a broken rule:
+
+            1. String literals are interned/pooled - when you write "hello" directly, the JVM checks a special String Constant Pool. If "hello" already exists
+               there, it reuses that same object; otherwise it adds it. So:
+                    String a = "hello";
+                    String b = "hello";
+                    a == b; // true -> both point to the SAME pooled object
+
+            2. new String(...) bypasses the pool - forces a brand-new object on the heap every time, even if identical content exists in the pool:
+                    String a = new String("hello");
+                    String b = new String("hello");
+                    a == b; // false -> two different objects
+
+            3. .equals() always compares content, regardless of pooling:
+                    a.equals(b); // true in both cases above
+
+        The rule: Never use == to compare String content - the result depends on whether the strings happen to be pooled or not, which is an implementation
+                  detail you shouldn't rely on. Always use .equals() (put the known non-null value first to avoid NPEs,
+                  e.g. "admin".equals(userInput) instead of userInput.equals("admin")).
+
+
+Q: Why must equals() and hashCode() always be overridden together?
+
+Ans:
+
+    This rule exists because of the "equals-hashCode contract" defined in the Object class documentation, which hash-based collections (HashMap, HashSet,
+    HashTable, ConcurrentHashMap, etc.) rely on to function correctly.
+
+
+    THE CONTRACT:
+
+    1. If two objects are equal according to equals(), they MUST have the same hashCode().
+    2. If two objects have the same hashCode(), they are NOT required to be equal (hash collisions are allowed).
+    3. hashCode() must remain consistent for an object as long as its fields used in equals()/hashCode() don't change.
+
+    WHY BOTH MUST BE OVERRIDDEN TOGETHER:
+
+        Case 1: Override equals() but NOT hashCode()
+
+            - Default hashCode() (from Object) is typically based on memory address.
+            - Two logically "equal" objects (per your equals()) will likely have DIFFERENT hash codes.
+            - Result: HashMap/HashSet will treat them as different entries, even though equals() says they're the same -> lookups silently fail.
+
+            Example:
+
+                class Point {
+                    int x, y;
+                    @Override
+                    public boolean equals(Object o) {
+                        Point p = (Point) o;
+                        return x == p.x && y == p.y;
+                    }
+                    // hashCode() NOT overridden
+                }
+
+                Set<Point> set = new HashSet<>();
+                set.add(new Point(1, 2));
+                set.contains(new Point(1, 2)); // false !! (bug)
+
+            Why:
+                HashSet first computes hashCode() to find the right "bucket". Since hashCode() wasn't overridden, the two Point instances land in
+                DIFFERENT buckets (different memory-based hash codes), so equals() is never even called to compare them.
+
+        Case 2: Override hashCode() but NOT equals()
+
+            - Two objects could return the same hashCode() (by design, e.g. same business key) but default equals() still compares references.
+            - Result: HashMap/HashSet correctly narrows down to the same bucket, but then equals() says "not equal" -> duplicate entries get added instead
+                      of being recognized as the same key, or lookups fail to find existing entries.
+
+            PRACTICAL IMPACT:
+                - HashMap.put(key, value) / get(key) / containsKey(key)
+                - HashSet.add(obj) / contains(obj)
+                - All of these rely on: first locate the bucket via hashCode(), THEN confirm the match via equals() within that bucket (to handle
+                  collisions). If either method is inconsistent with the other, lookups become unreliable - items "disappear" or duplicates get created.
+
+            RELEVANCE TO YOUR Money CLASS:
+                @EqualsAndHashCode
+                public class Money {
+                    private int amountUnits;
+                    private String currency;
+                    ...
+                }
+
+            Lombok's @EqualsAndHashCode generates BOTH equals() and hashCode() together automatically, using the SAME fields (amountUnits, currency)
+            for both. This guarantees the contract holds: two Money objects with the same amount and currency will always produce the same hashCode()
+            AND be equal() - safe to use in a HashSet<Money> or as a key in a HashMap<Money, ...> without bugs.
+
+            RULE OF THUMB:
+                If you override one, you MUST override the other - using the SAME set of fields in both - otherwise hash-based collections will behave
+                  incorrectly and unpredictably.
+
+Q: How does HashMap work internally?
+
+Ans:
+
+    HashMap<K, V> stores key-value pairs using an array of "buckets", where each bucket holds entries whose keys hash to the same index. It uses
+    hashCode() to decide WHERE to store an entry, and equals() to decide WHICH entry within that location matches.
+
+    INTERNAL STRUCTURE
+        - Backed by an array: Node<K,V>[] table (default initial capacity = 16).
+        - Each array slot is called a "bucket".
+        - Each bucket holds either:
+            - nothing (null),
+            - a single Node (linked list node), or
+            - a chain of Nodes (linked list) if multiple keys hash to the same bucket (collision), or
+            - a Red-Black Tree (if a single bucket's chain grows >= 8 entries AND table capacity >= 64) - introduced in Java 8 for performance.
+
+        Each Node stores: hash, key, value, next (pointer to next node in chain).
+
+        STEP-BY-STEP: put(key, value)
+
+            1. Compute hash: HashMap calls key.hashCode(), then applies its own "hash spreading" function:
+
+                    static final int hash(Object key) {
+                        int h;
+                        return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
+                    }
+
+                    This XORs the high bits into the low bits to reduce collisions when table size is small (since index is computed via bitmasking, only
+                    low bits normally matter).
+
+            2. Compute bucket index:
+
+                    index = hash & (table.length - 1) (equivalent to hash % table.length when length is a power of 2, but faster via bitwise AND).
+
+            3. Go to table[index]:
+
+                    - If empty -> place a new Node there directly.
+                    - If occupied -> walk the chain (or tree), calling equals() on each existing key to check if it matches:
+                        - If a match found (hash equal AND equals() true) -> overwrite the value.
+                    - If no match -> append a new Node to the end of the chain (or insert into the tree if treeified).
+
+            4. After insertion, check load factor: if (size > capacity * loadFactor)
+                [default loadFactor = 0.75, so resize triggers at 16*0.75=12 entries]
+                -> RESIZE: double the table capacity (e.g., 16 -> 32) and REHASH / redistribute all existing entries into the new, larger table.
+
+        STEP-BY-STEP: get(key)
+
+            1. Compute hash(key) the same way as above.
+            2. Compute index = hash & (table.length - 1).
+            3. Go to table[index], walk the chain/tree:
+                 - For each node, check: node.hash == hash AND (node.key == key OR key.equals(node.key)).
+                 - Return the value of the first matching node; return null if none match.
+
+        WHY BOTH hashCode() AND equals() MATTER HERE
+
+            - hashCode() determines WHICH BUCKET to look in (fast, O(1) average).
+            - equals() determines WHICH ENTRY within that bucket is the actual match (handles hash collisions where two different keys land in the same
+              bucket by coincidence).
+            - This is exactly why equals()/hashCode() must be consistent (see previous answer) - if hashCode() is inconsistent, get() may look in
+              the WRONG bucket entirely and never find a key that's logically equal.
+
+        COLLISION HANDLING
+
+            - Two different keys CAN produce the same bucket index (hash collision).
+            - Before Java 8: collisions always resolved via a simple linked list (O(n) worst case lookup within a bucket).
+            - Java 8+: if a single bucket's chain grows to >= 8 nodes AND the overall table capacity is >= 64, that bucket is "treeified" into a Red-Black
+              Tree -> worst-case lookup within that bucket becomes O(log n) instead of O(n). This protects against malicious/pathological hashCode()
+              collisions (e.g., hash-flooding attacks).
+
+        RESIZING (rehashing)
+
+            - Default capacity: 16, default load factor: 0.75.
+            - Threshold = capacity * loadFactor (e.g., 16 * 0.75 = 12).
+            - When size exceeds threshold, capacity doubles (16 -> 32 -> 64...), and
+                EVERY existing entry is rehashed and redistributed into new bucket positions (since index depends on table.length, which just changed).
+            - This is an expensive O(n) operation but happens infrequently (amortized O(1) per insertion overall).
+
+        TIME COMPLEXITY SUMMARY
+
+            - Average case: O(1) for put/get/containsKey (assuming good hash distribution, few collisions).
+            - Worst case (Java 7 or pre-treeification): O(n) if all keys collide into one bucket (linked list traversal).
+            - Worst case (Java 8+, treeified bucket): O(log n) once a bucket is treeified.
+
+        NULL KEYS
+            - HashMap allows ONE null key - it's always placed in bucket index 0 (hash treated as 0).
+
+Q: Interface vs Abstract class? When do you choose one over another?
+
+Ans:
+
+    1. Purpose / semantics
+
+        - Interface: defines a CONTRACT - "what a class CAN DO" (capability), e.g., Comparable, Runnable, Serializable.
+        - Abstract class: defines a PARTIAL IMPLEMENTATION - "what a class IS", a common base with shared state and behavior, e.g., AbstractList, BaseEntity.
+
+    2. Multiple inheritance
+
+        - A class can implement MULTIPLE interfaces.
+        - A class can extend only ONE abstract class (Java has no multiple class inheritance).
+
+    3. State (fields)
+
+        - Interface: can only have "public static final" constants (no instance state). Cannot maintain mutable instance fields.
+        - Abstract class: CAN have instance fields (state), constructors, and normal (non-static) methods with full access modifiers.
+
+    4. Constructors
+
+        - Interface: no constructors (can't be instantiated, no state to initialize).
+        - Abstract class: CAN have constructors, called via super() from subclasses - useful for initializing shared fields.
+
+    5. Method implementation
+
+        - Interface: methods are abstract by default; since Java 8, can also have "default" methods (with body) and "static" methods.
+        - Abstract class: can mix abstract methods AND fully implemented (concrete) methods freely.
+
+    6. Access modifiers
+
+        - Interface: methods are implicitly public (can't be private/ protected, except private helper methods for default methods since Java 9).
+        - Abstract class: methods can be public, protected, private, or package-private.
+
+    WHEN TO CHOOSE INTERFACE
+
+        - You want to define a CAPABILITY/CONTRACT that unrelated classes can implement, regardless of their position in a class hierarchy.
+            Example: Comparable<T>, Serializable - a String, a custom Money class, and a Payment class can all be Comparable, even though they share no
+                     common ancestor.
+
+        - You need MULTIPLE INHERITANCE of type - a class needs to conform to several unrelated contracts at once.
+            Example: class ApiKey implements Serializable, Comparable<ApiKey> {}
+
+        - You're designing a PUBLIC API/SPI where implementers shouldn't be forced into a specific class hierarchy.
+            Example: Spring's UserDetailsService, RepositoryInterface in Spring Data JPA.
+
+        - You want to leverage DEFAULT METHODS to add new behavior to existing interfaces without breaking all implementers (used heavily in Java 8+
+            for backward compatibility, e.g., List.sort() default method added to the List interface).
+
+    WHEN TO CHOOSE ABSTRACT CLASS
+
+        - You want to share COMMON STATE and/or COMMON IMPLEMENTATION across closely related subclasses, avoiding code duplication.
+            Example: your BaseEntity class (seen in Refund extends BaseEntity) - likely holds shared fields like createdAt, updatedAt, id-handling
+                    logic, auditing fields - common to ALL entities.
+
+        - The relationship between classes is a true "IS-A" hierarchy with a natural common ancestor (not just a shared capability).
+            Example: Shape (abstract) -> Circle, Square, Triangle - share common fields like "color", common methods like calculateArea() abstract,
+                    but also maybe a concrete method like describe() using shared state.
+
+        - You want to provide a PARTIAL implementation and force subclasses to fill in only the parts that vary (Template Method design pattern).
+            Example: AbstractRefundProcessor with a concrete process() method that calls an abstract validate() method overridden per payment gateway.
+
+        - You need CONSTRUCTORS to enforce initialization logic for all subclasses.
+
+    RULE OF THUMB (decision shortcut)
+
+        - Need shared STATE/fields across subclasses? -> Abstract class.
+        - Need multiple unrelated behaviors/contracts? -> Interface(s).
+        - Designing a hierarchy of "kinds of X"? -> Abstract class.
+        - Designing a capability any class can opt into? -> Interface.
+        - Modern Java (8+) blurs some lines with default methods, but state and constructors remain the deciding factor for abstract class vs interface.
+
+    JAVA 8+ NOTE: DEFAULT METHODS VS ABSTRACT CLASSES
+
+        - Default methods let interfaces provide some behavior, but they still CANNOT hold instance state - so even with default methods, if you need
+          mutable/shared fields, you still need an abstract class (or a regular class holding that state, used via composition).
+
+Q: Method overloading vs overriding - what's resolved at compile time vs runtime?
+
+Ans:
+
+    Overloading (Compile-time / Static polymorphism)
+
+        - Same method NAME, DIFFERENT parameter list (number, type, or order of parameters) within the SAME class (or a subclass adding new variants).
+        - Return type alone CANNOT differentiate overloads (must differ in parameters).
+
+            class Money {
+                static Money of(int amountUnits, String currency) {...}
+                static Money of(String currency, int amountUnits) {...}  // overload
+            }
+
+    Overriding (Runtime / Dynamic polymorphism)
+
+        - SUBCLASS redefines a method with the EXACT SAME signature (name, parameters, return type - or covariant return type) as its SUPERCLASS/ interface.
+        - Requires an IS-A relationship (inheritance/implementation).
+
+            class Shape {
+                double area() { return 0; }
+            }
+            class Circle extends Shape {
+                @Override
+                double area() { return Math.PI * r * r; }  // overriding
+            }
+
+    WHAT'S RESOLVED AT COMPILE TIME VS RUNTIME
+
+        OVERLOADING -> resolved at COMPILE TIME (static binding)
+
+            - The compiler looks at the DECLARED/STATIC type of the reference and the argument types/number at the call site, and decides WHICH overload
+                to call based on that - before the program even runs.
+            - This is why it's called "static polymorphism" or "compile-time polymorphism".
+
+                void print(int x) {}
+                void print(String x) {}
+
+                print(5);       // compiler picks print(int) at compile time
+                print("hello"); // compiler picks print(String) at compile time
+
+        OVERRIDING -> resolved at RUNTIME (dynamic binding / dynamic dispatch)
+
+            - The compiler only checks that the method exists on the DECLARED type (for valid compilation), but the ACTUAL method that executes is
+              determined at RUNTIME based on the REAL/ACTUAL object type (the object actually pointed to by the reference), not the reference's declared type.
+
+            - This is called "dynamic polymorphism" and relies on the JVM's virtual method table (vtable) - each class has a dispatch table mapping
+              method signatures to the actual implementation to invoke, resolved at the moment of invocation based on the object's real class.
+
+                Shape s = new Circle();   // declared type: Shape, actual type: Circle
+                s.area();                 // JVM looks up Circle's area() at RUNTIME, even though compile-time type is Shape
+
+        KEY MECHANISM BEHIND THE SCENES
+
+            - Overloading: resolved via METHOD SIGNATURE MATCHING at compile time - literally just picks a different method based on parameter types; it's
+                            effectively like having differently-named methods under the hood.
+            - Overriding:  resolved via VIRTUAL METHOD DISPATCH (vtable lookup) at runtime - the JVM uses the object's actual class (stored in the object
+                            header) to find the correct overridden method, regardless of what type the reference variable was declared as.
+
+        RULES / REQUIREMENTS COMPARISON
+
+            | Aspect               | Overloading                   | Overriding                         |
+            |--------------------- |-------------------------------|------------------------------------|
+            | Relationship         | Same class (or subclass adds) | Superclass/subclass (inheritance)  |
+            | Method name          | Same                          | Same                               |
+            | Parameters           | MUST differ                   | MUST be identical                  |
+            | Return type          | Can differ freely              | Same or covariant                 |
+            | Access modifier      | Can differ freely              | Cannot be MORE restrictive        |
+            | Exceptions           | Can differ freely              | Cannot throw broader checked ones |
+            | Binding              | Compile-time (static)          | Runtime (dynamic)                 |
+            | Polymorphism type    | Static/compile-time polymorphism | Dynamic/runtime polymorphism    |
+
+
+        COMMON GOTCHA: "static binding even looks like overriding sometimes"
+
+            - Overloading resolution uses the REFERENCE's declared/static type, NOT the actual object - this surprises people:
+
+                class Animal {}
+                class Dog extends Animal {}
+
+                void speak(Animal a) { System.out.println("Animal"); }
+                void speak(Dog d) { System.out.println("Dog"); }
+
+                Animal a = new Dog();
+                speak(a);   // prints "Animal" !!! - because overload resolution uses
+                            // the DECLARED type (Animal), decided at COMPILE time,
+                            // even though the actual object is a Dog.
+
+            - Contrast with overriding, where the ACTUAL object type always wins at runtime, regardless of the declared/reference type.
+
+        QUICK MEMORY HOOK
+
+            - OverLOADING = Local to compiler, Later doesn't matter (compile-time).
+            - OverRIDING  = Real object decides, Run decides (runtime).

@@ -61,7 +61,7 @@ public class PaymentServiceImpl implements PaymentService {
         PaymentRequest paymentRequest = new PaymentRequest(payment.getId(),
                 requestDto.orderId(), merchantId, order.getAmount(), requestDto.method(),
                 requestDto.methodDetails());
-
+        paymentTransitionService.apply(payment, PaymentEvent.AUTHORIZE_ATTEMPT);
         PaymentResult result = paymentGatewayRouter.initiate(paymentRequest);
 
         switch(result){
@@ -103,4 +103,44 @@ public class PaymentServiceImpl implements PaymentService {
         payment = paymentRepository.save(payment);
         return paymentMapper.toResponse(payment);
     }
+
+    @Override
+    @Transactional
+    public void resolveAuthorization(UUID paymentId, boolean approve,
+                                     String bankRef, String errorCode, String errorDescription) {
+        Payment payment = paymentRepository.findById(paymentId).orElseThrow(()-> new ResourceNotFoundException("Payment", paymentId));
+        if(payment.getStatus() != PaymentStatus.AUTHORIZING){
+            return;
+        }
+
+        OrderRecord orderRecord =payment.getOrder();
+
+        if(approve){
+            paymentTransitionService.apply(payment, PaymentEvent.AUTHORIZE_SUCCESS);
+            payment.setBankReference(bankRef);
+            payment.setAuthorizedAt(LocalDateTime.now());
+
+            paymentTransitionService.apply(payment, PaymentEvent.CAPTURE_REQUEST);
+            PaymentResult captureResult = paymentGatewayRouter.capture(payment.getMethod(), paymentId);
+            if (captureResult instanceof PaymentResult.Success success){
+                paymentTransitionService.apply(payment, PaymentEvent.CAPTURE_SUCCESS);
+                payment.setCapturedAt(LocalDateTime.now());
+                orderRecord.setOrderStatus(OrderStatus.PAID);
+            }else if(captureResult instanceof PaymentResult.Failure failure){
+                paymentTransitionService.apply(payment, PaymentEvent.CAPTURE_FAIL);
+                payment.setErrorCode(failure.errorCode());
+                payment.setErrorDescription(failure.errorCodeDescription());
+            }
+        }else{
+            paymentTransitionService.apply(payment, PaymentEvent.AUTHORIZE_FAIL);
+            payment.setErrorCode(errorCode);
+            payment.setErrorDescription(errorDescription);
+        }
+
+        paymentRepository.save(payment);
+        orderRepository.save(orderRecord);
+
+    }
+
+
 }
