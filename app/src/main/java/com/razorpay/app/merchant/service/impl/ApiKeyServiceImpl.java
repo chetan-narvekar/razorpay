@@ -13,6 +13,7 @@ import com.razorpay.app.merchant.repository.MerchantRepository;
 import com.razorpay.app.merchant.service.ApiKeyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,12 +30,13 @@ public class ApiKeyServiceImpl implements ApiKeyService {
     private final ApiKeyRepository apiKeyRepository;
     private final MerchantRepository merchantRepository;
     private final ApiKeyMapper apiKeyMapper;
+    private BCryptPasswordEncoder BCRYPT = new BCryptPasswordEncoder();
     @Override
     public ApiKeyCreateResponse create(UUID merchantId, CreateApiKeyRequest request) {
         Merchant merchant = merchantRepository.findById(merchantId).orElseThrow(()-> new ResourceNotFoundException("Merchant", merchantId));
         String keyId = "rzp_"+request.environment().name().toUpperCase()+"_"+RandomizerUtil.randomBase64(24);
         String rawSecret = RandomizerUtil.randomBase64(40);
-        ApiKey apiKey = ApiKey.builder().merchant(merchant).keyId(keyId).keySecretHash(rawSecret).environment(request.environment()).build();
+        ApiKey apiKey = ApiKey.builder().merchant(merchant).keyId(keyId).keySecretHash(BCRYPT.encode(rawSecret)).environment(request.environment()).build();
         apiKey = apiKeyRepository.save(apiKey);
 
         return new ApiKeyCreateResponse(apiKey.getId(), keyId, rawSecret, request.environment());
@@ -63,7 +65,7 @@ public class ApiKeyServiceImpl implements ApiKeyService {
         if(!key.isEnabled()) throw new RuntimeException(("Cannot rotate a disabled key"));
         String rawSecret = RandomizerUtil.randomBase64(40);
         key.setPreviousKeySecretHash(key.getKeySecretHash());
-        key.setKeySecretHash(rawSecret);
+        key.setKeySecretHash(BCRYPT.encode(rawSecret));
         key.setGracePeriodExpiresAt(LocalDateTime.now().plusHours(24));
         key.setRotatedAt(LocalDateTime.now());
 

@@ -38,4 +38,12 @@ public class JwtUtil {
     public Claims verifyAccessToken(String accessToken){
         return  Jwts.parser().verifyWith(getSecretKey()).build().parseSignedClaims(accessToken).getPayload();
     }
+
+    public String extractRole(Claims claims){
+        return claims.get("role", String.class);
+    }
+
+    public String extractMerchantId( Claims claims){
+        return claims.get("merchant_id", String.class);
+    }
 }
