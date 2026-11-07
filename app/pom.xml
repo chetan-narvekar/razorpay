@@ -22,6 +22,7 @@
         <java.version>25</java.version>
         <lombok.version>1.18.48</lombok.version>
         <org.mapstruct.version>1.6.3</org.mapstruct.version>
+        <maven.compiler.release>25</maven.compiler.release>
     </properties>
 
     <dependencies>
