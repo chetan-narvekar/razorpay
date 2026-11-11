@@ -26,6 +26,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Service
 @Slf4j
+@Transactional(readOnly = true)
 public class ApiKeyServiceImpl implements ApiKeyService {
 
     private final ApiKeyRepository apiKeyRepository;
@@ -33,7 +34,9 @@ public class ApiKeyServiceImpl implements ApiKeyService {
     private final ApiKeyMapper apiKeyMapper;
     private BCryptPasswordEncoder BCRYPT = new BCryptPasswordEncoder();
     private final ApiKeyCache apiKeyCache;
+
     @Override
+    @Transactional
     public ApiKeyCreateResponse create(UUID merchantId, CreateApiKeyRequest request) {
         Merchant merchant = merchantRepository.findById(merchantId).orElseThrow(()-> new ResourceNotFoundException("Merchant", merchantId));
         String keyId = "rzp_"+request.environment().name().toUpperCase()+"_"+RandomizerUtil.randomBase64(24);
@@ -71,6 +74,7 @@ public class ApiKeyServiceImpl implements ApiKeyService {
         key.setKeySecretHash(BCRYPT.encode(rawSecret));
         key.setGracePeriodExpiresAt(LocalDateTime.now().plusHours(24));
         key.setRotatedAt(LocalDateTime.now());
+        key = apiKeyRepository.save(key);
         apiKeyCache.evict(key.getKeyId());
         return new ApiKeyCreateResponse(
                 key.getId(), key.getKeyId(), rawSecret, key.getEnvironment());

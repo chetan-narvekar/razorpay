@@ -4,12 +4,14 @@ package com.razorpay.app.common.ratelimit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
+@Primary
 @Component
 @RequiredArgsConstructor
 @ConditionalOnProperty(name = "app.rate-limit.method", havingValue = "fixed")
