@@ -21,7 +21,7 @@ public class AuditorAwareImpl implements AuditorAware<String> {
             if(merchantContext.getMerchantId() != null) return Optional.of("merchant_id:"+merchantContext.getMerchantId());
 
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            // ignore this
         }
         return Optional.of("SYSTEM");
     }
